@@ -12,7 +12,7 @@ target_include_directories(${GGSOCK_CORE_LIB} PUBLIC
 target_include_directories(${GGSOCK_CORE_LIB} PRIVATE
     )
 
-target_link_libraries(${GGSOCK_CORE_LIB} PRIVATE
+target_link_libraries(${GGSOCK_CORE_LIB} PUBLIC
     ${CMAKE_THREAD_LIBS_INIT}
     )
 

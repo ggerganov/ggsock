@@ -21,6 +21,7 @@
 #endif
 #include <sys/types.h>
 
+#include <cstring>
 #include <map>
 #include <mutex>
 #include <thread>
