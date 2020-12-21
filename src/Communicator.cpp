@@ -164,6 +164,9 @@ namespace GGSock {
                     isAccepting = false;
                     isConnected = true;
 
+                    // stop listening for connections
+                    ::closeAndReset(sd);
+
                     break;
                 } while (sdpeer != -1);
             } else {
@@ -437,7 +440,6 @@ namespace GGSock {
         //        fprintf(stderr, "setsockopt(SO_LINGER) failed");
         //    }
         //}
-
 
         auto & addr = data.addr;
 

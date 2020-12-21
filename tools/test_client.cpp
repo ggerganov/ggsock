@@ -1,4 +1,4 @@
-/*! \file test_server.cpp
+/*! \file test_client.cpp
  *  \brief Enter description here.
  *  \author Georgi Gerganov
  */
@@ -14,7 +14,20 @@
 void update() {
 }
 
-int main() {
+int main(int argc, char ** argv) {
+    printf("Usage: %s ip port\n", argv[0]);
+    if (argc < 3) {
+        return -1;
+    }
+
+    std::string ip = "127.0.0.1";
+    int port = 12003;
+
+    if (argc > 1) ip = argv[1];
+    if (argc > 2) port = atoi(argv[2]);
+
+    printf("Connecting to %s : %d\n", ip.c_str(), port);
+
     GGSock::Communicator client;
     client.setMessageCallback(95, [](const char * dataBuffer, size_t dataSize) {
         printf("Received message 95\n");
@@ -28,11 +41,9 @@ int main() {
     std::thread worker = std::thread([&]() {
         while(true) {
             printf("init client\n");
-            if (client.connect("127.0.0.1", 12003, 0) == false) continue;
+            if (client.connect(ip, port, 1000) == false) continue;
             printf("after connect\n");
-            while (client.isConnected() == false) {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-            }
+
             while (client.isConnected()) {
                 client.send(195);
                 std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -46,6 +57,7 @@ int main() {
 #else
     while(true) {
         update();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 #endif
 

@@ -1,3 +1,7 @@
 .DS_STORE
+.clangd
+
 build
 build-*
+
+compile_commands.json
