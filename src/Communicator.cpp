@@ -1,9 +1,4 @@
-/*! \file Communicator.cpp
- *  \brief Enter description here.
- *  \author Georgi Gerganov
- */
-
-#include "ggsock/Communicator.h"
+#include "ggsock/communicator.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -57,55 +52,44 @@ namespace {
                                 TCP_NODELAY,     /* name of option */
                                 (char *) &flag,  /* the cast is historical cruft */
                                 sizeof(int));    /* length of option value */
+        if (result != 0) {
+            fprintf(stderr, "Failed to set non-blocking socket\n");
+        }
 #endif
     }
 
     struct MessageHeader {
-        ::GGSock::TBufferSize  size;
-        ::GGSock::TMessageType type;
+        ::GGSock::Communicator::TBufferSize  size;
+        ::GGSock::Communicator::TMessageType type;
 
         static constexpr size_t getSizeInBytes() {
             return
-                sizeof(::GGSock::TBufferSize) +
-                sizeof(::GGSock::TMessageType);
+                sizeof(::GGSock::Communicator::TBufferSize) +
+                sizeof(::GGSock::Communicator::TMessageType);
         }
     };
 }
 
 namespace GGSock {
     struct Communicator::Data {
-        Data() {
+        Data(bool startOwnWorker) {
+            // this is needed to avoid program crash upon sending data to disconnected clients
+            // todo : do it once per program execution, not per Communicator construction
+            signal(SIGPIPE, SIG_IGN);
+
             std::lock_guard<std::mutex> lock(mutex);
 
             bufferDataRecv.resize(256*1024, 0);
 
-            isRunning = true;
-            worker = std::thread([this]() {
-                while (isRunning) {
-                    {
-                        std::lock_guard<std::mutex> lock(mutex);
-                        if (isServer && isAccepting) {
-                            doAccept();
-                        } else if (isServer && isAccepting == false && isConnected) {
-                            doRead();
-                        } else if (isServer == false && isConnecting) {
-                            doConnect();
-                        } else if (isServer == false && isConnecting == false && isConnected) {
-                            doRead();
-                        }
-                        {
-                            std::lock_guard<std::mutex> lock(mutexSend);
-                            if (isConnected && (rbHead != rbEnd)) {
-                                doSend();
-                            }
-                            if (isConnected == false) {
-                                rbHead = rbEnd;
-                            }
-                        }
+            if (startOwnWorker) {
+                isRunning = true;
+                worker = std::thread([this]() {
+                    while (isRunning) {
+                        update();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                }
-            });
+                });
+            }
         }
 
         ~Data() {
@@ -114,14 +98,41 @@ namespace GGSock {
                 isRunning = false;
                 isConnected = false;
                 isConnecting = false;
-                isAccepting = false;
+                isListening = false;
                 ::closeAndReset(sdpeer);
                 ::closeAndReset(sd);
             }
-            worker.join();
+
+            if (worker.joinable()) {
+                worker.join();
+            }
         }
 
-        bool doAccept() {
+        bool update() {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (isServer && isListening) {
+                doListen();
+            } else if (isServer && isListening == false && isConnected) {
+                doRead();
+            } else if (isServer == false && isConnecting) {
+                doConnect();
+            } else if (isServer == false && isConnecting == false && isConnected) {
+                doRead();
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutexSend);
+                if (isConnected && (rbHead != rbEnd)) {
+                    doSend();
+                }
+                if (isConnected == false) {
+                    rbHead = rbEnd;
+                }
+            }
+
+            return true;
+        }
+
+        bool doListen() {
             FD_ZERO(&master_set);
             max_sd = sd;
             FD_SET(sd, &master_set);
@@ -157,11 +168,15 @@ namespace GGSock {
                         return false;
                     }
 
-                    printf("  New incoming connection - %d, %d\n", sd, sdpeer);
+                    socklen_t len;
+                    len = sizeof(peeraddr);
+                    getpeername(sdpeer, (struct sockaddr*)&peeraddr, &len);
+
+                    printf("  New incoming connection - %d, %d, ip = %s\n", sd, sdpeer, inet_ntoa(peeraddr.sin_addr));
 
                     ::setNonBlocking(sdpeer);
 
-                    isAccepting = false;
+                    isListening = false;
                     isConnected = true;
 
                     // stop listening for connections
@@ -182,17 +197,17 @@ namespace GGSock {
             while (isConnecting) {
                 if (::connect(sd, (struct sockaddr *) &addr, sizeof(addr)) < 0 && errno != EISCONN) {
                     if (errno != EINPROGRESS) {
-                        //::closeAndReset(sd);
-                        //sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                        ::closeAndReset(sd);
+                        sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-                        //int enable = 1;
-                        //if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (char *)&enable, sizeof(int)) < 0) {
-                        //    fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
-                        //}
+                        int enable = 1;
+                        if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (char *)&enable, sizeof(int)) < 0) {
+                            fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
+                        }
 
-                        //if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
-                        //    fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
-                        //}
+                        if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
+                            fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
+                        }
 
                         //{
                         //    linger lin;
@@ -241,14 +256,16 @@ namespace GGSock {
                     ::closeAndReset(sd);
 
                     TErrorCode errorCode = errno;
-                    if (errorCallback) errorCallback(errorCode);
+                    if (errorCallback) {
+                        errorCallback(errorCode);
+                    }
                 }
                 return;
             }
 
             if (rc == 0) {
                 isConnected = false;
-                isAccepting = false;
+                isListening = false;
                 ::closeAndReset(sdpeer);
                 ::closeAndReset(sd);
 
@@ -260,11 +277,12 @@ namespace GGSock {
                 return;
             }
 
-            printf("  %d bytes received, %d %d\n", rc,
-                   (int)(*reinterpret_cast<int32_t *>(bufferHeaderRecv.data())),
-                   (int)(*reinterpret_cast<int16_t *>(bufferHeaderRecv.data() + sizeof(int32_t)))
-                   );
-            if (rc == bufferHeaderRecv.size()) {
+            //printf("  %d bytes received, %d %d\n", rc,
+            //       (int)(*reinterpret_cast<int32_t *>(bufferHeaderRecv.data())),
+            //       (int)(*reinterpret_cast<int16_t *>(bufferHeaderRecv.data() + sizeof(int32_t)))
+            //       );
+
+            if (rc == (int) bufferHeaderRecv.size()) {
                 TBufferSize size = 0;
                 TMessageType type = 0;
                 memcpy(&size, bufferHeaderRecv.data(), sizeof(size));
@@ -277,7 +295,7 @@ namespace GGSock {
                     lastMessageType = type;
                     leftToReceive = size - ::MessageHeader::getSizeInBytes();
                     offsetReceive = 0;
-                    if (leftToReceive > bufferDataRecv.size()) {
+                    if (leftToReceive > (int) bufferDataRecv.size()) {
                         printf("Extend receive buffer to %d bytes\n", (int) bufferDataRecv.size());
                         bufferDataRecv.resize(leftToReceive);
                     }
@@ -293,15 +311,20 @@ namespace GGSock {
                                 ::closeAndReset(sdpeer);
                                 ::closeAndReset(sd);
 
-                                TErrorCode errorCode = errno;
-                                if (errorCallback) errorCallback(errorCode);
+                                if (errorCallback) {
+                                    TErrorCode errorCode = errno;
+                                    errorCallback(errorCode);
+                                }
+
+                                break;
                             }
+
                             continue;
                         }
 
                         if (rc == 0) {
                             isConnected = false;
-                            isAccepting = false;
+                            isListening = false;
                             ::closeAndReset(sdpeer);
                             ::closeAndReset(sd);
 
@@ -341,6 +364,8 @@ namespace GGSock {
                             TErrorCode errorCode = errno;
                             errorCallback(errorCode);
                         }
+
+                        break;
                     }
                     continue;
                 }
@@ -348,7 +373,7 @@ namespace GGSock {
                 offset += rc;
             }
 
-            if (++rbHead >= ringBufferSend.size()) {
+            if (++rbHead >= (int) ringBufferSend.size()) {
                 rbHead = 0;
             }
         }
@@ -356,7 +381,7 @@ namespace GGSock {
         bool addMessageToSend(std::string && msg) {
             ringBufferSend[rbEnd] = std::move(msg);
 
-            if (++rbEnd >= ringBufferSend.size()) {
+            if (++rbEnd >= (int) ringBufferSend.size()) {
                 rbEnd = 0;
             }
 
@@ -364,7 +389,7 @@ namespace GGSock {
         }
 
         bool isServer = true;
-        bool isAccepting = false;
+        bool isListening = false;
         bool isConnected = false;
         bool isConnecting = false;
         bool isRunning = false;
@@ -378,16 +403,17 @@ namespace GGSock {
 
         struct timeval timeout;
         struct sockaddr_in addr;
+        struct sockaddr_in peeraddr;
 
         fd_set master_set;
         fd_set working_set;
 
-        size_t offsetReceive = 0;
-        size_t leftToReceive = 0;
+        int32_t offsetReceive = 0;
+        int32_t leftToReceive = 0;
         TMessageType lastMessageType = -1;
 
-        std::size_t rbHead = 0;
-        std::size_t rbEnd = 0;
+        std::int32_t rbHead = 0;
+        std::int32_t rbEnd = 0;
         std::array<std::string, 128> ringBufferSend;
 
         std::vector<char> bufferDataRecv;
@@ -403,8 +429,12 @@ namespace GGSock {
         std::map<TMessageType, CBMessage> messageCallback;
     };
 
-    Communicator::Communicator() : data_(new Data()) {}
+    Communicator::Communicator(bool startOwnWorker) : data_(new Data(startOwnWorker)) {}
     Communicator::~Communicator() {}
+
+    bool Communicator::update() {
+        return getData().update();
+    }
 
     bool Communicator::listen(TPort port, int32_t timeout_ms, int32_t maxConnections) {
         auto & data = getData();
@@ -412,7 +442,7 @@ namespace GGSock {
         std::lock_guard<std::mutex> lock(data.mutex);
 
         if (data.isConnected) return false;
-        if (data.isAccepting) return false;
+        if (data.isListening) return false;
 
         ::closeAndReset(data.sd);
 
@@ -464,20 +494,20 @@ namespace GGSock {
         ::setNonBlocking(data.sd);
 
         data.isServer = true;
-        data.isAccepting = true;
+        data.isListening = true;
 
         data.timeoutListen_ms = std::max(0, timeout_ms);
         if (timeout_ms > 0) {
-            bool success = data.doAccept();
+            bool success = data.doListen();
 
-            data.isAccepting = false;
+            data.isListening = false;
             return success;
         } else if (timeout_ms < 0) {
             data.timeoutListen_ms = 1;
-            while (data.isAccepting) {
-                bool success = data.doAccept();
+            while (data.isListening) {
+                bool success = data.doListen();
                 if (success) {
-                    data.isAccepting = false;
+                    data.isListening = false;
                     return true;
                 }
             }
@@ -495,7 +525,6 @@ namespace GGSock {
         if (data.isConnected) return false;
         if (data.isConnecting) return false;
 
-        int sockfd, n;
         struct hostent *server;
 
         data.sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -565,11 +594,11 @@ namespace GGSock {
     bool Communicator::disconnect() {
         auto & data = getData();
 
-        data.isAccepting = false;
+        std::lock_guard<std::mutex> lock(data.mutex);
+
+        data.isListening = false;
         data.isConnecting = false;
         data.isConnected = false;
-
-        std::lock_guard<std::mutex> lock(data.mutex);
 
         ::closeAndReset(data.sdpeer);
         ::closeAndReset(data.sd);
@@ -580,9 +609,17 @@ namespace GGSock {
     bool Communicator::isConnected() const {
         auto & data = getData();
 
-        //std::lock_guard<std::mutex> lock(data.mutex);
+        std::lock_guard<std::mutex> lock(data.mutex);
 
         return data.isConnected;
+    }
+
+    TAddress Communicator::getPeerAddress() const {
+        auto & data = getData();
+
+        std::lock_guard<std::mutex> lock(data.mutex);
+
+        return inet_ntoa(data.peeraddr.sin_addr);
     }
 
     bool Communicator::send(TMessageType type) {
@@ -610,7 +647,7 @@ namespace GGSock {
         return true;
     }
 
-    bool Communicator::send(TMessageType type, const char * dataBuffer, size_t dataSize) {
+    bool Communicator::send(TMessageType type, const char * dataBuffer, TBufferSize dataSize) {
         auto & data = getData();
 
         std::lock_guard<std::mutex> lock(data.mutexSend);
@@ -682,4 +719,37 @@ namespace GGSock {
         return false;
     }
 
+    TAddress Communicator::getLocalAddress() {
+        int sock = socket(PF_INET, SOCK_DGRAM, 0);
+        sockaddr_in loopback;
+
+        if (sock == -1) {
+            return "";
+        }
+
+        std::memset(&loopback, 0, sizeof(loopback));
+        loopback.sin_family = AF_INET;
+        loopback.sin_addr.s_addr = INADDR_LOOPBACK;   // using loopback ip address
+        loopback.sin_port = htons(9);                 // using debug port
+
+        if (::connect(sock, reinterpret_cast<sockaddr*>(&loopback), sizeof(loopback)) == -1) {
+            close(sock);
+            return "";
+        }
+
+        socklen_t addrlen = sizeof(loopback);
+        if (getsockname(sock, reinterpret_cast<sockaddr*>(&loopback), &addrlen) == -1) {
+            close(sock);
+            return "";
+        }
+
+        close(sock);
+
+        char buf[INET_ADDRSTRLEN];
+        if (inet_ntop(AF_INET, &loopback.sin_addr, buf, INET_ADDRSTRLEN) == 0x0) {
+            return "";
+        }
+
+        return buf;
+    }
 }

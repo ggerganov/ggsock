@@ -1,16 +1,11 @@
-/*! \file test0.cpp
- *  \brief Enter description here.
- *  \author Georgi Gerganov
- */
-
-#include "ggsock/Communicator.h"
+#include "ggsock/communicator.h"
 
 #include <thread>
 
 int main() {
     {
-        GGSock::Communicator server;
-        server.setErrorCallback([](auto code) {
+        GGSock::Communicator server(true);
+        server.setErrorCallback([](GGSock::Communicator::TErrorCode code) {
             printf("Network error = %d\n", code);
         });
 
@@ -24,7 +19,7 @@ int main() {
         }
 
         for (int i = 0; i < 3; ++i) {
-            GGSock::Communicator client;
+            GGSock::Communicator client(true);
             if (server.listen(12345, 0) == false) return 6;
             if (client.connect("127.0.0.1", 12345, 100) == false) return 7;
             while (client.isConnected() == false) {}
@@ -45,11 +40,11 @@ int main() {
     }
 
     {
-        GGSock::Communicator server;
-        server.setErrorCallback([](auto code) {
+        GGSock::Communicator server(true);
+        server.setErrorCallback([](GGSock::Communicator::TErrorCode code) {
             printf("Network error = %d\n", code);
         });
-        server.setMessageCallback(42, [&](const char * dataBuffer, size_t dataSize) {
+        server.setMessageCallback(42, [&](const char * , size_t dataSize) {
             printf("Received buffer. Size = %d\n", (int) dataSize);
             server.send(43);
             return true;
@@ -57,8 +52,8 @@ int main() {
 
         server.listen(12345, 0);
 
-        GGSock::Communicator client;
-        client.setMessageCallback(43, [](const char * dataBuffer, size_t dataSize) {
+        GGSock::Communicator client(true);
+        client.setMessageCallback(43, [](const char * , size_t ) {
             printf("Received acknowledgment\n");
             return true;
         });
