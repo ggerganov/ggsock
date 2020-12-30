@@ -148,6 +148,10 @@ struct FileServer::Impl {
 
     bool exists(const FileInfo & info) const {
         for (int i = 0; i < (int) files.size(); ++i) {
+            if (fileUsed[i] == false) {
+                continue;
+            }
+
             const auto & file = files[i];
             if (info.uri == file.info.uri &&
                 info.filesize == file.info.filesize &&
@@ -327,7 +331,12 @@ bool FileServer::update() {
             // todo : data checks
             fileChunkToSend.uri = req.uri;
             fileChunkToSend.chunkId = req.chunkId;
-            for (const auto & file : m_impl->files) {
+            for (int i = 0; i < (int) m_impl->files.size(); ++i) {
+                if (m_impl->fileUsed[i] == false) {
+                    continue;
+                }
+
+                const auto & file = m_impl->files[i];
                 if (file.info.uri != req.uri) {
                     continue;
                 }
@@ -341,11 +350,12 @@ bool FileServer::update() {
                 fileChunkToSend.pLen = pLen;
                 fileChunkToSend.data.assign(file.data.begin() + pStart, file.data.begin() + pStart + pLen);
 
+                doSendFileChunk = true;
+
                 break;
             }
 
             client.fileChunkRequests.pop_front();
-            doSendFileChunk = true;
         }
 
         client.isUpdating = true;
@@ -502,6 +512,10 @@ const FileServer::FileData & FileServer::getFileData(const TURI & uri) const {
         std::lock_guard<std::mutex> lock(m_impl->mutex);
 
         for (int i = 0; i < (int) m_impl->files.size(); ++i) {
+            if (m_impl->fileUsed[i] == false) {
+                continue;
+            }
+
             if (m_impl->files[i].info.uri != uri) {
                 continue;
             }
