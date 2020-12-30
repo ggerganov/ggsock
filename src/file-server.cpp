@@ -368,6 +368,8 @@ bool FileServer::update() {
         auto & client = m_impl->clients.at(updateId);
         if (doListen) {
             client.communicator->listen(m_impl->parameters.listenPort, 0);
+        } else {
+            client.communicator->stopListening();
         }
         if (doSendFileInfos) {
             SerializationBuffer buffer;
@@ -449,6 +451,26 @@ bool FileServer::clearAllFiles() {
     return true;
 }
 
+bool FileServer::clearFile(const TURI & uri) {
+    {
+        std::lock_guard<std::mutex> lock(m_impl->mutex);
+
+        for (int i = 0; i < (int) m_impl->fileUsed.size(); ++i) {
+            if (m_impl->files[i].info.uri != uri) {
+                continue;
+            }
+            m_impl->fileUsed[i] = false;
+            m_impl->files[i] = {};
+
+            break;
+        }
+
+        m_impl->changedFileInfos = true;
+    }
+
+    return true;
+}
+
 FileServer::TFileInfos FileServer::getFileInfos() const {
     TFileInfos result;
 
@@ -473,6 +495,23 @@ FileServer::TClientInfos FileServer::getClientInfos() const {
 
 const FileServer::Parameters & FileServer::getParameters() const {
     return m_impl->parameters;
+}
+
+const FileServer::FileData & FileServer::getFileData(const TURI & uri) const {
+    {
+        std::lock_guard<std::mutex> lock(m_impl->mutex);
+
+        for (int i = 0; i < (int) m_impl->files.size(); ++i) {
+            if (m_impl->files[i].info.uri != uri) {
+                continue;
+            }
+
+            return m_impl->files[i];
+        }
+    }
+
+    static FileData empty;
+    return empty;
 }
 
 }

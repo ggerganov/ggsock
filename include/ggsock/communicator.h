@@ -24,7 +24,9 @@ namespace GGSock {
             bool connect(const TAddress & address, TPort port, int32_t timeout_ms);
 
             bool disconnect();
+            bool stopListening();
             bool isConnected() const;
+            bool isConnecting() const;
             TAddress getPeerAddress() const;
 
             bool send(TMessageType type);

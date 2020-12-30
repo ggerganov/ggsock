@@ -94,11 +94,13 @@ namespace GGSock {
 
             bool addFile(FileData && data);
             bool clearAllFiles();
+            bool clearFile(const TURI & uri);
 
             TFileInfos getFileInfos() const;
             TClientInfos getClientInfos() const;
 
             const Parameters & getParameters() const;
+            const FileData & getFileData(const TURI & uri) const;
 
         private:
             struct Impl;

@@ -607,12 +607,37 @@ namespace GGSock {
         return true;
     }
 
+    bool Communicator::stopListening() {
+        auto & data = getData();
+
+        std::lock_guard<std::mutex> lock(data.mutex);
+
+        if (data.isListening) {
+            data.isListening = false;
+
+            ::closeAndReset(data.sdpeer);
+            ::closeAndReset(data.sd);
+
+            return true;
+        }
+
+        return false;
+    }
+
     bool Communicator::isConnected() const {
         auto & data = getData();
 
         std::lock_guard<std::mutex> lock(data.mutex);
 
         return data.isConnected;
+    }
+
+    bool Communicator::isConnecting() const {
+        auto & data = getData();
+
+        std::lock_guard<std::mutex> lock(data.mutex);
+
+        return data.isConnecting;
     }
 
     TAddress Communicator::getPeerAddress() const {
