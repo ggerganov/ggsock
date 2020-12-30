@@ -384,13 +384,13 @@ bool FileServer::update() {
         if (doSendFileInfos) {
             SerializationBuffer buffer;
             Serialize()(m_impl->fileInfos, buffer);
-            client.communicator->send(MsgFileInfosResponse, buffer.data(), buffer.size());
+            client.communicator->send(MsgFileInfosResponse, buffer.data(), (int) buffer.size());
             client.communicator->update();
         }
         if (doSendFileChunk) {
             SerializationBuffer buffer;
             Serialize()(fileChunkToSend, buffer);
-            client.communicator->send(MsgFileChunkResponse, buffer.data(), buffer.size());
+            client.communicator->send(MsgFileChunkResponse, buffer.data(), (int) buffer.size());
             client.communicator->update();
         }
         client.communicator->update();
@@ -426,7 +426,7 @@ bool FileServer::addFile(FileData && data) {
         }
 
         if (data.info.nChunks > (int32_t) data.data.size()) {
-            data.info.nChunks = data.data.size();
+            data.info.nChunks = (int32_t) data.data.size();
         }
 
         data.info.filesize = data.data.size();

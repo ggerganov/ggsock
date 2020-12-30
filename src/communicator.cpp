@@ -249,7 +249,7 @@ namespace GGSock {
         }
 
         void doRead() {
-            int rc = recv(sdpeer, bufferHeaderRecv.data(), bufferHeaderRecv.size(), 0);
+            int rc = (int) recv(sdpeer, bufferHeaderRecv.data(), bufferHeaderRecv.size(), 0);
             if (rc < 0) {
                 if (errno != EWOULDBLOCK) {
                     isConnected = false;
@@ -305,7 +305,7 @@ namespace GGSock {
                         //printf("left = %d\n", (int) leftToReceive);
                         size_t curSize = std::min(65536, (int) leftToReceive);
 
-                        int rc = recv(sdpeer, bufferDataRecv.data() + offsetReceive, curSize, 0);
+                        int rc = (int) recv(sdpeer, bufferDataRecv.data() + offsetReceive, curSize, 0);
                         if (rc < 0) {
                             if (errno != EWOULDBLOCK) {
                                 isConnected = false;
@@ -350,11 +350,11 @@ namespace GGSock {
 
         void doSend() {
             const auto & curMessage = ringBufferSend[rbHead];
-            TBufferSize size = curMessage.size();
+            TBufferSize size = (TBufferSize) curMessage.size();
 
             int offset = 0;
             while (size > 0) {
-                int rc = ::send(sdpeer, curMessage.data() + offset, size, 0);
+                int rc = (int) ::send(sdpeer, curMessage.data() + offset, size, 0);
                 if (rc < 0) {
                     if (errno != EWOULDBLOCK) {
                         isConnected = false;

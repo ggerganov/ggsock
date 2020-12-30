@@ -117,7 +117,7 @@ ADD_HELPER(double,      fundamental)
 template <> bool Serialize::operator()<std::string>(const std::string & t, SerializationBuffer & buffer, size_t & offset) {
     bool res = true;
 
-    int32_t n = t.size();
+    int32_t n = (int32_t) t.size();
     res &= operator()(n, buffer, offset);
     res &= ::serialize_vector(t.data(), n, buffer, offset, *this);
 

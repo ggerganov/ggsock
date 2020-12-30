@@ -76,7 +76,7 @@ template <typename T>bool Unserialize::operator()(T & obj, const SerializationBu
 template <typename T> bool Serialize::operator()(const std::vector<T> & t, SerializationBuffer & buffer, size_t & offset) {
     bool res = true;
 
-    int32_t n = t.size();
+    int32_t n = (int32_t) t.size();
     res &= operator()(n, buffer, offset);
     for (const auto & p : t) {
         res &= operator()(p, buffer, offset);
@@ -140,7 +140,7 @@ template <typename First, typename Second> bool Unserialize::operator()( std::pa
 template <typename Key, typename Value> bool Serialize::operator()(const std::map<Key, Value> & t, SerializationBuffer & buffer, size_t & offset) {
     bool res = true;
 
-    int32_t n = t.size();
+    int32_t n = (int32_t) t.size();
     res &= operator()(n, buffer, offset);
     for (const auto & p : t) {
         res &= operator()(p.first, buffer, offset);
