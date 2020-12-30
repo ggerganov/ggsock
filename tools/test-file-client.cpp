@@ -3,6 +3,8 @@
 #include "ggsock/serialization.h"
 
 #include <thread>
+#include <cstring>
+#include <cassert>
 
 std::function<void()> g_update;
 

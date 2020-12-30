@@ -7,6 +7,7 @@
 #include <atomic>
 #include <thread>
 #include <queue>
+#include <mutex>
 
 namespace GGSock {
 
