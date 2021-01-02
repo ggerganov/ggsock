@@ -197,7 +197,7 @@ namespace GGSock {
 
             while (isConnecting) {
                 if (::connect(sd, (struct sockaddr *) &addr, sizeof(addr)) < 0 && errno != EISCONN) {
-                    if (errno != EINPROGRESS) {
+                    if (errno != EINPROGRESS && errno != EALREADY) {
                         ::closeAndReset(sd);
                         sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
