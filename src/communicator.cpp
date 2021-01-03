@@ -2,6 +2,7 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #define close closesocket
 #pragma comment(lib, "Ws2_32.lib")
 #else
@@ -76,7 +77,9 @@ namespace GGSock {
         Data(bool startOwnWorker) {
             // this is needed to avoid program crash upon sending data to disconnected clients
             // todo : do it once per program execution, not per Communicator construction
+#ifndef __MINGW32__
             signal(SIGPIPE, SIG_IGN);
+#endif
 
             std::lock_guard<std::mutex> lock(mutex);
 
@@ -206,9 +209,11 @@ namespace GGSock {
                             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
                         }
 
+#ifndef __MINGW32__
                         if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
                             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
                         }
+#endif
 
                         //{
                         //    linger lin;
@@ -459,9 +464,11 @@ namespace GGSock {
             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
         }
 
+#ifndef __MINGW32__
         if (setsockopt(data.sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
         }
+#endif
 
         //{
         //    linger lin;
@@ -540,9 +547,11 @@ namespace GGSock {
             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
         }
 
+#ifndef __MINGW32__
         if (setsockopt(data.sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
         }
+#endif
 
         //{
         //    linger lin;
