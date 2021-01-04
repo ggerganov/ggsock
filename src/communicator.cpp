@@ -60,6 +60,30 @@ namespace {
 #endif
     }
 
+    bool e_wouldBlock() {
+#ifdef _WIN32
+        return errno == EWOULDBLOCK || WSAGetLastError() == WSAEWOULDBLOCK;
+#else
+        return errno == EWOULDBLOCK;
+#endif
+    }
+
+    bool e_isConnected() {
+#ifdef _WIN32
+        return errno == EISCONN || WSAGetLastError() == WSAEISCONN;
+#else
+        return errno == EISCONN;
+#endif
+    }
+
+    bool e_inProgress() {
+#ifdef _WIN32
+        return errno == EINPROGRESS || errno == EALREADY || WSAGetLastError() == WSAEINPROGRESS || WSAGetLastError() == WSAEALREADY;
+#else
+        return errno == EINPROGRESS || errno == EALREADY;
+#endif
+    }
+
     struct MessageHeader {
         ::GGSock::Communicator::TBufferSize  size;
         ::GGSock::Communicator::TMessageType type;
@@ -75,11 +99,24 @@ namespace {
 namespace GGSock {
     struct Communicator::Data {
         Data(bool startOwnWorker) {
-            // this is needed to avoid program crash upon sending data to disconnected clients
-            // todo : do it once per program execution, not per Communicator construction
+            // todo : maybe move this to a static method
+            static bool isFirst = true;
+            if (isFirst) {
+                // Initialize Winsock
+                WSADATA wsaData;
+                int iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+                if (iResult != 0) {
+                    printf("WSAStartup failed with error: %d\n", iResult);
+                    return;
+                }
+
+                // this is needed to avoid program crash upon sending data to disconnected clients
 #ifndef __MINGW32__
-            signal(SIGPIPE, SIG_IGN);
+                signal(SIGPIPE, SIG_IGN);
 #endif
+
+                isFirst = false;
+            }
 
             std::lock_guard<std::mutex> lock(mutex);
 
@@ -166,7 +203,7 @@ namespace GGSock {
                 do {
                     sdpeer = accept(sd, NULL, NULL);
                     if (sdpeer < 0) {
-                        if (errno != EWOULDBLOCK) {
+                        if (e_wouldBlock() == false) {
                             perror("  accept() failed");
                         }
                         return false;
@@ -199,8 +236,9 @@ namespace GGSock {
             auto tStart = std::chrono::high_resolution_clock::now();
 
             while (isConnecting) {
-                if (::connect(sd, (struct sockaddr *) &addr, sizeof(addr)) < 0 && errno != EISCONN) {
-                    if (errno != EINPROGRESS && errno != EALREADY) {
+                auto rc = ::connect(sd, (struct sockaddr *) &addr, sizeof(addr));
+                if (rc < 0 && e_isConnected() == false) {
+                    if (e_inProgress() == false && e_wouldBlock() == false) {
                         ::closeAndReset(sd);
                         sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -209,9 +247,9 @@ namespace GGSock {
                             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
                         }
 
-#ifndef __MINGW32__
+#ifndef _WIN32
                         if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
-                            fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
+                            fprintf(stderr, "setsockopt(SO_REUSEPORT) failed");
                         }
 #endif
 
@@ -256,7 +294,7 @@ namespace GGSock {
         void doRead() {
             int rc = (int) recv(sdpeer, bufferHeaderRecv.data(), bufferHeaderRecv.size(), 0);
             if (rc < 0) {
-                if (errno != EWOULDBLOCK) {
+                if (e_wouldBlock() == false) {
                     isConnected = false;
                     ::closeAndReset(sdpeer);
                     ::closeAndReset(sd);
@@ -312,7 +350,7 @@ namespace GGSock {
 
                         int rc = (int) recv(sdpeer, bufferDataRecv.data() + offsetReceive, curSize, 0);
                         if (rc < 0) {
-                            if (errno != EWOULDBLOCK) {
+                            if (e_wouldBlock() == false) {
                                 isConnected = false;
                                 ::closeAndReset(sdpeer);
                                 ::closeAndReset(sd);
@@ -361,7 +399,7 @@ namespace GGSock {
             while (size > 0) {
                 int rc = (int) ::send(sdpeer, curMessage.data() + offset, size, 0);
                 if (rc < 0) {
-                    if (errno != EWOULDBLOCK) {
+                    if (e_wouldBlock() == false) {
                         isConnected = false;
                         ::closeAndReset(sdpeer);
                         ::closeAndReset(sd);
@@ -464,9 +502,9 @@ namespace GGSock {
             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
         }
 
-#ifndef __MINGW32__
+#ifndef _WIN32
         if (setsockopt(data.sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
-            fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
+            fprintf(stderr, "setsockopt(SO_REUSEPORT) failed");
         }
 #endif
 
@@ -547,9 +585,9 @@ namespace GGSock {
             fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
         }
 
-#ifndef __MINGW32__
+#ifndef _WIN32
         if (setsockopt(data.sd, SOL_SOCKET, SO_REUSEPORT, (char *)&enable, sizeof(int)) < 0) {
-            fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
+            fprintf(stderr, "setsockopt(SO_REUSEPORT) failed");
         }
 #endif
 
