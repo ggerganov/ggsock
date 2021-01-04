@@ -102,6 +102,7 @@ namespace GGSock {
             // todo : maybe move this to a static method
             static bool isFirst = true;
             if (isFirst) {
+#ifdef _WIN32
                 // Initialize Winsock
                 WSADATA wsaData;
                 int iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -109,9 +110,10 @@ namespace GGSock {
                     printf("WSAStartup failed with error: %d\n", iResult);
                     return;
                 }
+#endif
 
+#ifndef _WIN32
                 // this is needed to avoid program crash upon sending data to disconnected clients
-#ifndef __MINGW32__
                 signal(SIGPIPE, SIG_IGN);
 #endif
 
