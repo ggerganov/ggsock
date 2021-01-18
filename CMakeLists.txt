@@ -13,16 +13,14 @@ else()
 endif()
 
 if (EMSCRIPTEN)
-    set(GGSOCK_LIBRARY_TYPE STATIC)
+    set(BUILD_SHARED_LIBS_DEFAULT OFF)
 else()
-    if (BUILD_SHARED_LIBS)
-        set(GGSOCK_LIBRARY_TYPE SHARED)
-    else ()
-        set(GGSOCK_LIBRARY_TYPE STATIC)
-    endif()
+    set(BUILD_SHARED_LIBS_DEFAULT ON)
 endif()
 
 # options
+
+option(BUILD_SHARED_LIBS              "ggsock: build shared libs" ${BUILD_SHARED_LIBS_DEFAULT})
 
 option(GGSOCK_ALL_WARNINGS            "ggsock: enable all compiler warnings" ON)
 option(GGSOCK_ALL_WARNINGS_3RD_PARTY  "ggsock: enable all compiler warnings in 3rd party libs" ON)

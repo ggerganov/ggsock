@@ -1,7 +1,7 @@
 #
 ## ggsock
 
-add_library(ggsock ${GGSOCK_LIBRARY_TYPE}
+add_library(ggsock
     communicator.cpp
     file-server.cpp
     serialization.cpp
