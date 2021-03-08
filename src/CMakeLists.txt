@@ -27,4 +27,7 @@ if (MINGW)
     target_link_libraries(ggsock PRIVATE wsock32 ws2_32 stdc++)
 endif()
 
-install(TARGETS ggsock LIBRARY DESTINATION lib)
+install(TARGETS ggsock
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib/static
+    )
