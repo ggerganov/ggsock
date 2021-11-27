@@ -133,7 +133,7 @@ template <> bool Unserialize::operator()<std::string>(std::string & t, const cha
     t.resize(n);
     res &= ::unserialize_vector(&t[0], n, bufferData, bufferSize, offset, *this);
 
-    return true;
+    return res;
 }
 
 
