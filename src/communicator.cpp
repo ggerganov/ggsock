@@ -348,7 +348,7 @@ namespace GGSock {
 
                     while (leftToReceive > 0) {
                         //printf("left = %d\n", (int) leftToReceive);
-                        size_t curSize = std::min(65536, (int) leftToReceive);
+                        size_t curSize = (std::min)(65536, (int) leftToReceive);
 
                         int rc = (int) recv(sdpeer, bufferDataRecv.data() + offsetReceive, curSize, 0);
                         if (rc < 0) {
@@ -544,7 +544,7 @@ namespace GGSock {
         data.isServer = true;
         data.isListening = true;
 
-        data.timeoutListen_ms = std::max(0, timeout_ms);
+        data.timeoutListen_ms = (std::max)(0, timeout_ms);
         if (timeout_ms > 0) {
             bool success = data.doListen();
 
@@ -620,7 +620,7 @@ namespace GGSock {
         data.isServer = false;
         data.isConnecting = true;
 
-        data.timeoutConnect_ms = std::max(0, timeout_ms);
+        data.timeoutConnect_ms = (std::max)(0, timeout_ms);
         if (timeout_ms > 0) {
             bool res = data.doConnect();
 
